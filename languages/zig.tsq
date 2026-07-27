@@ -1,0 +1,4 @@
+(function_declaration (identifier) @function) @context
+(variable_declaration (identifier) @struct (struct_declaration)) @context
+(variable_declaration (identifier) @enum (enum_declaration)) @context
+(variable_declaration (identifier) @struct (union_declaration)) @context

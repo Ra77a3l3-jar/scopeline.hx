@@ -1,0 +1,13 @@
+((list
+   .
+   (symbol) @_def
+   .
+   (list . (symbol) @function)) @context
+ (#any-of? @_def "define" "define-syntax" "define/public" "define/private" "define/override"))
+
+((list
+   .
+   (symbol) @_def
+   .
+   (symbol) @variable) @context
+ (#eq? @_def "define"))

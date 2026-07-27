@@ -1,0 +1,6 @@
+(function_declaration name: (identifier) @function) @context
+(generator_function_declaration name: (identifier) @function) @context
+(class_declaration name: (identifier) @class) @context
+(method_definition name: (property_identifier) @method) @context
+(variable_declarator name: (identifier) @function value: (arrow_function)) @context
+(variable_declarator name: (identifier) @function value: (function_expression)) @context

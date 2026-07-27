@@ -1,0 +1,8 @@
+(function_definition declarator: (function_declarator declarator: (identifier) @function)) @context
+(function_definition declarator: (function_declarator declarator: (field_identifier) @method)) @context
+(function_definition declarator: (function_declarator declarator: (qualified_identifier) @method)) @context
+(function_definition declarator: (pointer_declarator declarator: (function_declarator declarator: (identifier) @function))) @context
+(class_specifier name: (type_identifier) @class body: (_)) @context
+(struct_specifier name: (type_identifier) @struct body: (_)) @context
+(enum_specifier name: (type_identifier) @enum body: (_)) @context
+(namespace_definition name: (namespace_identifier) @namespace) @context

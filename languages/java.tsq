@@ -1,0 +1,6 @@
+(class_declaration name: (identifier) @class) @context
+(interface_declaration name: (identifier) @interface) @context
+(enum_declaration name: (identifier) @enum) @context
+(record_declaration name: (identifier) @struct) @context
+(method_declaration name: (identifier) @method) @context
+(constructor_declaration name: (identifier) @constructor) @context

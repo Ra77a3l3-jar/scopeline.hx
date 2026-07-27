@@ -1,0 +1,10 @@
+(function_item name: (identifier) @function) @context
+(struct_item name: (type_identifier) @struct) @context
+(enum_item name: (type_identifier) @enum) @context
+(union_item name: (type_identifier) @struct) @context
+(trait_item name: (type_identifier) @trait) @context
+(impl_item type: (_) @class) @context
+(mod_item name: (identifier) @module) @context
+(macro_definition name: (identifier) @macro) @context
+(const_item name: (identifier) @constant) @context
+(static_item name: (identifier) @constant) @context

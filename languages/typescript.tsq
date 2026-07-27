@@ -1,0 +1,8 @@
+(function_declaration name: (identifier) @function) @context
+(class_declaration name: (type_identifier) @class) @context
+(method_definition name: (property_identifier) @method) @context
+(interface_declaration name: (type_identifier) @interface) @context
+(enum_declaration name: (identifier) @enum) @context
+(type_alias_declaration name: (type_identifier) @type) @context
+(internal_module name: (identifier) @namespace) @context
+(variable_declarator name: (identifier) @function value: (arrow_function)) @context

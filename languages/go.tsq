@@ -1,0 +1,3 @@
+(function_declaration name: (identifier) @function) @context
+(method_declaration name: (field_identifier) @method) @context
+(type_spec (type_identifier) @type) @context
