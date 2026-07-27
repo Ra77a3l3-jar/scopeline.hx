@@ -49,3 +49,7 @@ Each lives in `languages/<lang>.tsq` and captures a container as `@context` plus
 ## Contributing
 
 PRs to increase the number of supported languages are very aprecieted.
+
+## Credits
+
+This plugin is a fork of the plugin [context.hx](https://codeberg.org/gwid/context.hx)
