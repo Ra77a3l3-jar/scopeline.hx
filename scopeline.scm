@@ -262,22 +262,25 @@
         (scopeline-draw frame y width (scopeline-segments base sep bg))))))
 
 ;; refresh path, file and visibility from the cached crumbs
+;; visible only with a scope to show
 (define (scopeline-update-view! doc-id)
   (set! *scopeline-path* (scopeline-cursor-path *scopeline-crumbs* doc-id))
   (set! *scopeline-file* (with-handler (lambda (_) #f) (cx->current-file)))
-  (set! *scopeline-visible?* (if *scopeline-file* #t #f)))
+  (set! *scopeline-visible?* (not (empty? *scopeline-path*))))
 
 ;; runs on every cursor move, so it stays cheap and never forces a redraw.
 ;; the normal repaint that follows a move already re-renders the bar
 (define (scopeline-refresh-path!)
   (let ([doc-id (scopeline-current-doc-id)])
     (when doc-id
-      (let ([switched (not (equal? doc-id *scopeline-doc-id*))])
+      (let ([switched (not (equal? doc-id *scopeline-doc-id*))]
+            [was-visible *scopeline-visible?*])
         (when switched ; buffer switch makes query again
           (set! *scopeline-doc-id* doc-id)
           (set! *scopeline-crumbs* (scopeline-doc-crumbs doc-id)))
         (scopeline-update-view! doc-id)
-        (when switched (scopeline-sync-layout!)))))) ; relayout only on switch
+        (when (or switched (not (equal? was-visible *scopeline-visible?*)))
+          (scopeline-sync-layout!)))))) ; relayout on switch or when the bar appears/hides
 
 ;; query the whole document again after edits or buffer changes
 (define (scopeline-refresh-crumbs!)
