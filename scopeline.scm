@@ -159,11 +159,33 @@
 
 (define *scopeline-sep* " › ")
 
+(define *scopeline-max-depth* 0)
+(define *scopeline-show-file?* #t)
+(define *scopeline-row* 0)
+
 ;;@doc
-;; Set scopeline options from init.scm, #:bg paints the bar background
-(define (scopeline-configure! #:bg [bg #f])
+;; Set scopeline options
+(define (scopeline-configure! #:bg [bg *scopeline-bg*]
+                              #:separator [separator *scopeline-sep*]
+                              #:max-depth [max-depth *scopeline-max-depth*]
+                              #:show-file? [show-file? *scopeline-show-file?*])
   (set! *scopeline-bg* bg)
+  (set! *scopeline-sep* separator)
+  (set! *scopeline-max-depth* max-depth)
+  (set! *scopeline-show-file?* show-file?)
   (when *scopeline-enabled?* (helix.redraw)))
+
+;; rows moka's bufferline reserves, 0 when moka is absent or its bar is hidden.
+;; eval-string keeps this optional, a missing moka is caught instead of a load error
+(define (scopeline-moka-top)
+  (with-handler (lambda (_) 0)
+    (let ([v (eval-string "(moka-reserved-top)")])
+      (if (number? v) v 0))))
+
+;; place the bar under moka and reserve the rows above the document
+(define (scopeline-sync-layout!)
+  (set! *scopeline-row* (scopeline-moka-top))
+  (set-editor-clip-top! (+ *scopeline-row* 1)))
 
 (define (scopeline-bar-style)
   (if *scopeline-bg*
@@ -179,6 +201,15 @@
   (let ([s (if fg (style-fg (style) fg) (style))])
     (if bg (style-bg s bg) s)))
 
+(define (scopeline-drop lst n)
+  (if (or (<= n 0) (empty? lst)) lst (scopeline-drop (cdr lst) (- n 1))))
+
+(define (scopeline-visible-path)
+  (let ([len (length *scopeline-path*)])
+    (if (and (> *scopeline-max-depth* 0) (> len *scopeline-max-depth*))
+        (scopeline-drop *scopeline-path* (- len *scopeline-max-depth*))
+        *scopeline-path*)))
+
 ;; file then one entry per scope
 (define (scopeline-segments base sep bg)
   (define crumbs
@@ -191,15 +222,15 @@
                      (cons " " base)
                      (cons (ScopeCrumb-name c) base))))
      '()
-     *scopeline-path*))
-  (if *scopeline-file*
+     (scopeline-visible-path)))
+  (if (and *scopeline-show-file?* *scopeline-file*)
       (let ([name (file-name *scopeline-file*)])
         (append (list (cons (glyph-icon name)
                             (scopeline-seg (glyph-hex->color (glyph-color name)) bg))
                       (cons " " base)
                       (cons name base))
                 crumbs))
-      '()))
+      (if (empty? crumbs) crumbs (cdr crumbs)))) ; drop the leading separator
 
 ;; paint left to right
 (define (scopeline-draw frame y width segs)
@@ -220,11 +251,12 @@
     (with-handler
       (lambda (_) void)
       (let* ([width (area-width rect)]
+             [y *scopeline-row*] ; below moka's bufferline
              [bg (scopeline-bar-bg)]
              [base (scopeline-seg (style->fg (theme-scope-ref "ui.text")) bg)]
              [sep (scopeline-seg (style->fg (theme-scope-ref "comment")) bg)])
-        (buffer/clear-with frame (area 0 0 width 1) (scopeline-bar-style))
-        (scopeline-draw frame 0 width (scopeline-segments base sep bg))))))
+        (buffer/clear-with frame (area 0 y width 1) (scopeline-bar-style))
+        (scopeline-draw frame y width (scopeline-segments base sep bg))))))
 
 ;; recompute the path at the cursor
 (define (scopeline-refresh-path!)
@@ -239,6 +271,7 @@
 (define (scopeline-refresh-crumbs!)
   (let ([doc-id (scopeline-current-doc-id)])
     (when doc-id
+      (scopeline-sync-layout!) ; moka bar may have changed
       (set! *scopeline-doc-id* doc-id)
       (set! *scopeline-crumbs* (scopeline-doc-crumbs doc-id))
       (scopeline-refresh-path!)
@@ -259,10 +292,16 @@
                    (lambda (_ _) (when *scopeline-enabled?* (scopeline-debounce 150 scopeline-refresh-crumbs!))))
     (register-hook 'document-opened
                    (lambda (_) (when *scopeline-enabled?* (scopeline-debounce 50 scopeline-refresh-crumbs!))))
+    (register-hook 'document-closed
+                   (lambda (_) (when *scopeline-enabled?* (scopeline-debounce 50 scopeline-refresh-crumbs!))))
     (register-hook 'document-saved
                    (lambda (_) (when *scopeline-enabled?* (scopeline-debounce 50 scopeline-refresh-crumbs!))))
     (register-hook 'selection-did-change
-                   (lambda (_) (when *scopeline-enabled?* (scopeline-refresh-path!) (helix.redraw))))
+                   (lambda (_)
+                     (when *scopeline-enabled?*
+                       (set-editor-clip-top! (+ *scopeline-row* 1))
+                       (scopeline-refresh-path!)
+                       (helix.redraw))))
     (set! *scopeline-hooks?* #t)))
 
 ;;@doc
@@ -271,7 +310,7 @@
   (unless *scopeline-enabled?*
     (set! *scopeline-enabled?* #t)
     (scopeline-register-hooks!)
-    (set-editor-clip-top! 2)
+    (scopeline-sync-layout!)
     (push-component!
      (new-component! "scopeline"
                      #f
