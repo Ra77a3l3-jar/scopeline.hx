@@ -163,6 +163,9 @@
 (define *scopeline-show-file?* #t)
 (define *scopeline-row* 0)
 
+;; hidden for the scratch buffer, shown once a real file is focused
+(define *scopeline-visible?* #f)
+
 ;;@doc
 ;; Set scopeline options
 (define (scopeline-configure! #:bg [bg *scopeline-bg*]
@@ -182,10 +185,10 @@
     (let ([v (eval-string "(moka-reserved-top)")])
       (if (number? v) v 0))))
 
-;; place the bar under moka and reserve the rows above the document
+;; sit under moka and reserve our row, but only when the bar is visible
 (define (scopeline-sync-layout!)
   (set! *scopeline-row* (scopeline-moka-top))
-  (set-editor-clip-top! (+ *scopeline-row* 1)))
+  (set-editor-clip-top! (+ *scopeline-row* (if *scopeline-visible?* 1 0))))
 
 (define (scopeline-bar-style)
   (if *scopeline-bg*
@@ -247,7 +250,7 @@
          (loop (cdr xs) (+ x (string-length shown))))])))
 
 (define (scopeline-render state rect frame)
-  (when *scopeline-enabled?*
+  (when (and *scopeline-enabled?* *scopeline-visible?*)
     (with-handler
       (lambda (_) void)
       (let* ([width (area-width rect)]
@@ -258,23 +261,32 @@
         (buffer/clear-with frame (area 0 y width 1) (scopeline-bar-style))
         (scopeline-draw frame y width (scopeline-segments base sep bg))))))
 
-;; recompute the path at the cursor
+;; refresh path, file and visibility from the cached crumbs
+(define (scopeline-update-view! doc-id)
+  (set! *scopeline-path* (scopeline-cursor-path *scopeline-crumbs* doc-id))
+  (set! *scopeline-file* (with-handler (lambda (_) #f) (cx->current-file)))
+  (set! *scopeline-visible?* (if *scopeline-file* #t #f)))
+
+;; runs on every cursor move, so it stays cheap and never forces a redraw.
+;; the normal repaint that follows a move already re-renders the bar
 (define (scopeline-refresh-path!)
   (let ([doc-id (scopeline-current-doc-id)])
     (when doc-id
-      (unless (equal? doc-id *scopeline-doc-id*) ; buffer switch makes query again
-        (set! *scopeline-doc-id* doc-id)
-        (set! *scopeline-crumbs* (scopeline-doc-crumbs doc-id)))
-      (set! *scopeline-path* (scopeline-cursor-path *scopeline-crumbs* doc-id))
-      (set! *scopeline-file* (with-handler (lambda (_) #f) (cx->current-file))))))
+      (let ([switched (not (equal? doc-id *scopeline-doc-id*))])
+        (when switched ; buffer switch makes query again
+          (set! *scopeline-doc-id* doc-id)
+          (set! *scopeline-crumbs* (scopeline-doc-crumbs doc-id)))
+        (scopeline-update-view! doc-id)
+        (when switched (scopeline-sync-layout!)))))) ; relayout only on switch
 
+;; query the whole document again after edits or buffer changes
 (define (scopeline-refresh-crumbs!)
   (let ([doc-id (scopeline-current-doc-id)])
     (when doc-id
-      (scopeline-sync-layout!) ; moka bar may have changed
       (set! *scopeline-doc-id* doc-id)
       (set! *scopeline-crumbs* (scopeline-doc-crumbs doc-id))
-      (scopeline-refresh-path!)
+      (scopeline-update-view! doc-id)
+      (scopeline-sync-layout!) ; visibility or moka bar may have changed
       (helix.redraw))))
 
 (define (scopeline-debounce ms thunk)
@@ -297,11 +309,7 @@
     (register-hook 'document-saved
                    (lambda (_) (when *scopeline-enabled?* (scopeline-debounce 50 scopeline-refresh-crumbs!))))
     (register-hook 'selection-did-change
-                   (lambda (_)
-                     (when *scopeline-enabled?*
-                       (set-editor-clip-top! (+ *scopeline-row* 1))
-                       (scopeline-refresh-path!)
-                       (helix.redraw))))
+                   (lambda (_) (when *scopeline-enabled?* (scopeline-refresh-path!))))
     (set! *scopeline-hooks?* #t)))
 
 ;;@doc
@@ -310,14 +318,13 @@
   (unless *scopeline-enabled?*
     (set! *scopeline-enabled?* #t)
     (scopeline-register-hooks!)
-    (scopeline-sync-layout!)
     (push-component!
      (new-component! "scopeline"
                      #f
                      scopeline-render
                      (hash "cursor" (lambda (state rect) #f)
                            "handle_event" (lambda (state event) event-result/ignore))))
-    (scopeline-debounce 50 scopeline-refresh-crumbs!)))
+    (scopeline-refresh-crumbs!))) ; sets visibility and layout for the current buffer
 
 ;;@doc
 ;; Hide the breadcrumb bar
@@ -325,7 +332,7 @@
   (when *scopeline-enabled?*
     (set! *scopeline-enabled?* #f)
     (pop-last-component-by-name! "scopeline")
-    (set-editor-clip-top! 0)
+    (set-editor-clip-top! (scopeline-moka-top)) ; leave moka's rows reserved
     (helix.redraw)))
 
 ;;@doc
