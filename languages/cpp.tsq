@@ -6,3 +6,8 @@
 (struct_specifier name: (type_identifier) @struct body: (_)) @context
 (enum_specifier name: (type_identifier) @enum body: (_)) @context
 (namespace_definition name: (namespace_identifier) @namespace) @context
+;; typedef struct/enum/union carry the name on the declarator,
+;; so the context must cover the whole type_definition
+(type_definition (struct_specifier body: (_)) (type_identifier) @struct) @context
+(type_definition (enum_specifier body: (_)) (type_identifier) @enum) @context
+(type_definition (union_specifier body: (_)) (type_identifier) @struct) @context
