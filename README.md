@@ -18,7 +18,7 @@ Then load it in your `init.scm`:
 (require "scopeline/scopeline.scm")
 ```
 
-If you use [moka.hx](https://github.com/Ra77a3l3-jar/moka.hx)'s bufferline, scopeline sits directly under it. Without moka it draws on the top row.
+If you use [moka.hx](https://github.com/Ra77a3l3-jar/moka.hx)'s bufferline, scopeline sits directly under it. Without moka it draws on the top row. The row is always reserved, so the view never resizes when the breadcrumb is empty.
 
 ## Usage
 
@@ -33,13 +33,19 @@ If you use [moka.hx](https://github.com/Ra77a3l3-jar/moka.hx)'s bufferline, scop
 Call `scopeline-configure!` from `init.scm`.
 
 ```scheme
-(scopeline-configure! #:bg "#1e1e2e"     ; bar background, by default uses theme bg
-                      #:separator " › "  ; drawn between levels
-                      #:max-depth 0      ; deepest levels to keep, 0 is all
-                      #:show-file? #t)   ; leading file icon and name
+(scopeline-configure! #:bg "#1e1e2e"        ; bar background, by default uses theme bg
+                      #:separator " › "     ; drawn between levels
+                      #:max-depth 0         ; deepest levels to keep, 0 is all
+                      #:show-file? #t       ; leading file icon and name
+                      #:position 'top-left  ; corner: 'top-left 'top-right 'bottom-left 'bottom-right
+                      #:always-reserved? #t) ; keep the row even when nothing is shown
 ```
 
 By default `#:bg` is `#f`, so the bar uses the theme background and looks transparent.
+
+`#:position` places the bar in the chosen corner. The bottom corners draw one row above moka's statusline, or one row above the native statusline when moka is absent.
+
+`#:always-reserved?` is `#t` by default, so the bar row is always there and the view never resizes. Set it to `#f` for the old behavior: the row is only used while the cursor is inside a scope and freed on blank lines or scope-less lines.
 
 ## Languages
 

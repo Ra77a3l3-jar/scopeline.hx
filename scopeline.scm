@@ -3,6 +3,7 @@
 (require "helix/static.scm")
 (require "helix/treesitter.scm")
 (require "helix/components.scm")
+(require "helix/configuration.scm")
 (require (prefix-in helix. "helix/commands.scm"))
 (require "glyph/glyph.scm")
 (require-builtin helix/core/text as text.)
@@ -161,22 +162,27 @@
 
 (define *scopeline-max-depth* 0)
 (define *scopeline-show-file?* #t)
+(define *scopeline-position* 'top-left)
+(define *scopeline-always-reserved?* #t)
 (define *scopeline-row* 0)
-
-;; hidden for the scratch buffer, shown once a real file is focused
-(define *scopeline-visible?* #f)
 
 ;;@doc
 ;; Set scopeline options
 (define (scopeline-configure! #:bg [bg *scopeline-bg*]
                               #:separator [separator *scopeline-sep*]
                               #:max-depth [max-depth *scopeline-max-depth*]
-                              #:show-file? [show-file? *scopeline-show-file?*])
+                              #:show-file? [show-file? *scopeline-show-file?*]
+                              #:position [position *scopeline-position*]
+                              #:always-reserved? [always-reserved? *scopeline-always-reserved?*])
   (set! *scopeline-bg* bg)
   (set! *scopeline-sep* separator)
   (set! *scopeline-max-depth* max-depth)
   (set! *scopeline-show-file?* show-file?)
-  (when *scopeline-enabled?* (helix.redraw)))
+  (set! *scopeline-position* position)
+  (set! *scopeline-always-reserved?* always-reserved?)
+  (when *scopeline-enabled?*
+    (scopeline-sync-layout!)
+    (helix.redraw)))
 
 ;; rows moka's bufferline reserves, 0 when moka is absent or its bar is hidden.
 ;; eval-string keeps this optional, a missing moka is caught instead of a load error
@@ -185,10 +191,53 @@
     (let ([v (eval-string "(moka-reserved-top)")])
       (if (number? v) v 0))))
 
-;; sit under moka and reserve our row, but only when the bar is visible
+;; rows moka reserves, 0 when not active
+(define (scopeline-moka-bottom)
+  (with-handler (lambda (_) 0)
+    (let ([v (eval-string "(moka-reserved-bottom)")])
+      (if (number? v) v 0))))
+
+(define (scopeline-doc-count)
+  (with-handler (lambda (_) 0) (length (editor-all-documents))))
+
+;; rows the native bufferline takes, 0 when hidden or when moka blanks it
+(define (scopeline-native-top)
+  (with-handler (lambda (_) 0)
+    (let ([mode (get-config-option-value "bufferline")])
+      (cond
+        [(equal? mode "always") 1]
+        [(and (equal? mode "multiple") (> (scopeline-doc-count) 1)) 1]
+        [else 0]))))
+
+(define (scopeline-top?)
+  (let ([p *scopeline-position*])
+    (or (equal? p 'top-left) (equal? p 'top-right))))
+
+(define (scopeline-right?)
+  (let ([p *scopeline-position*])
+    (or (equal? p 'top-right) (equal? p 'bottom-right))))
+
+;; bar draws and reserves its row when always-reserved? or a scope is under the cursor
+(define (scopeline-bar-visible?)
+  (or *scopeline-always-reserved?* (not (empty? *scopeline-path*))))
+
+;; reserve row, always or only when the bar has something to show
+;; moka's row needs our clip, helix clips the native bufferline itself
 (define (scopeline-sync-layout!)
-  (set! *scopeline-row* (scopeline-moka-top))
-  (set-editor-clip-top! (+ *scopeline-row* (if *scopeline-visible?* 1 0))))
+  (set! *scopeline-row* (+ (scopeline-moka-top) (scopeline-native-top)))
+  (set-editor-clip-top!
+   (+ (scopeline-moka-top)
+      (if (and (scopeline-top?)
+               (scopeline-bar-visible?)
+               (= (scopeline-native-top) 0))
+          1 0))))
+
+(define (scopeline-bar-row height)
+  (if (scopeline-top?)
+      *scopeline-row*
+      ;; one row above moka's statusline, or above the native one plus the message row
+      (let ([moka (scopeline-moka-bottom)])
+        (max 0 (- height 1 (if (> moka 0) moka 2))))))
 
 (define (scopeline-bar-style)
   (if *scopeline-bg*
@@ -235,38 +284,40 @@
                 crumbs))
       (if (empty? crumbs) crumbs (cdr crumbs)))) ; drop the leading separator
 
-;; paint left to right
-(define (scopeline-draw frame y width segs)
-  (let loop ([xs segs] [x 1])
-    (cond
-      [(empty? xs) void]
-      [(>= x (- width 1)) void]
-      [else
-       (let* ([text (car (car xs))]
-              [style (cdr (car xs))]
-              [room (- width 1 x)]
-              [shown (if (> (string-length text) room) (substring text 0 (max 0 room)) text)])
-         (frame-set-string! frame x y shown style)
-         (loop (cdr xs) (+ x (string-length shown))))])))
+(define (scopeline-segs-width segs)
+  (foldl (lambda (s acc) (+ acc (string-length (car s)))) 0 segs))
+
+;; paint left to right, anchored to the right edge when right? is #t
+(define (scopeline-draw frame y width segs right?)
+  (let ([start (if right? (max 1 (- width 1 (scopeline-segs-width segs))) 1)])
+    (let loop ([xs segs] [x start])
+      (cond
+        [(empty? xs) void]
+        [(>= x (- width 1)) void]
+        [else
+         (let* ([text (car (car xs))]
+                [style (cdr (car xs))]
+                [room (- width 1 x)]
+                [shown (if (> (string-length text) room) (substring text 0 (max 0 room)) text)])
+           (frame-set-string! frame x y shown style)
+           (loop (cdr xs) (+ x (string-length shown))))]))))
 
 (define (scopeline-render state rect frame)
-  (when (and *scopeline-enabled?* *scopeline-visible?*)
+  (when (and *scopeline-enabled?* (scopeline-bar-visible?))
     (with-handler
       (lambda (_) void)
       (let* ([width (area-width rect)]
-             [y *scopeline-row*] ; below moka's bufferline
+             [y (scopeline-bar-row (area-height rect))]
              [bg (scopeline-bar-bg)]
              [base (scopeline-seg (style->fg (theme-scope-ref "ui.text")) bg)]
              [sep (scopeline-seg (style->fg (theme-scope-ref "comment")) bg)])
         (buffer/clear-with frame (area 0 y width 1) (scopeline-bar-style))
-        (scopeline-draw frame y width (scopeline-segments base sep bg))))))
+        (scopeline-draw frame y width (scopeline-segments base sep bg) (scopeline-right?))))))
 
-;; refresh path, file and visibility from the cached crumbs
-;; visible only with a scope to show
+;; refresh path and file from the cached crumbs
 (define (scopeline-update-view! doc-id)
   (set! *scopeline-path* (scopeline-cursor-path *scopeline-crumbs* doc-id))
-  (set! *scopeline-file* (with-handler (lambda (_) #f) (cx->current-file)))
-  (set! *scopeline-visible?* (not (empty? *scopeline-path*))))
+  (set! *scopeline-file* (with-handler (lambda (_) #f) (cx->current-file))))
 
 ;; runs on every cursor move, so it stays cheap and never forces a redraw.
 ;; the normal repaint that follows a move already re-renders the bar
@@ -274,12 +325,12 @@
   (let ([doc-id (scopeline-current-doc-id)])
     (when doc-id
       (let ([switched (not (equal? doc-id *scopeline-doc-id*))]
-            [was-visible *scopeline-visible?*])
+            [was-visible (scopeline-bar-visible?)])
         (when switched ; buffer switch makes query again
           (set! *scopeline-doc-id* doc-id)
           (set! *scopeline-crumbs* (scopeline-doc-crumbs doc-id)))
         (scopeline-update-view! doc-id)
-        (when (or switched (not (equal? was-visible *scopeline-visible?*)))
+        (when (or switched (not (equal? was-visible (scopeline-bar-visible?))))
           (scopeline-sync-layout!)))))) ; relayout on switch or when the bar appears/hides
 
 ;; query the whole document again after edits or buffer changes
@@ -289,7 +340,7 @@
       (set! *scopeline-doc-id* doc-id)
       (set! *scopeline-crumbs* (scopeline-doc-crumbs doc-id))
       (scopeline-update-view! doc-id)
-      (scopeline-sync-layout!) ; visibility or moka bar may have changed
+      (scopeline-sync-layout!)
       (helix.redraw))))
 
 (define (scopeline-debounce ms thunk)
@@ -327,7 +378,7 @@
                      scopeline-render
                      (hash "cursor" (lambda (state rect) #f)
                            "handle_event" (lambda (state event) event-result/ignore))))
-    (scopeline-refresh-crumbs!))) ; sets visibility and layout for the current buffer
+    (scopeline-refresh-crumbs!)))
 
 ;;@doc
 ;; Hide the breadcrumb bar
