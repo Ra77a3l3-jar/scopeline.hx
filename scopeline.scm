@@ -378,7 +378,9 @@
                      scopeline-render
                      (hash "cursor" (lambda (state rect) #f)
                            "handle_event" (lambda (state event) event-result/ignore))))
-    (scopeline-refresh-crumbs!)))
+    ;; refresh on the next tick: called from init.scm before a view exists, and
+    ;; editor->doc-id panics in rust when the view tree has no view yet
+    (enqueue-thread-local-callback scopeline-refresh-crumbs!)))
 
 ;;@doc
 ;; Hide the breadcrumb bar
