@@ -1,0 +1,7 @@
+(module_binding (module_name) @module) @context
+(module_type_definition (module_type_name) @interface) @context
+(type_binding name: (type_constructor) @type) @context
+(class_binding (class_name) @class) @context
+(class_type_binding (class_type_name) @class) @context
+(method_specification (method_name) @method) @context
+(value_specification (value_name) @function) @context
