@@ -319,6 +319,23 @@
   (set! *scopeline-path* (scopeline-cursor-path *scopeline-crumbs* doc-id))
   (set! *scopeline-file* (with-handler (lambda (_) #f) (cx->current-file))))
 
+;; re-create the bar, the fork sometimes kills it with hx . 
+(define (scopeline-ensure-component!)
+  (set! *scopeline-enabled?* #t)
+  (pop-last-component-by-name! "scopeline")
+  (push-component!
+   (new-component! "scopeline"
+                   #f
+                   scopeline-render
+                   (hash "cursor" (lambda (state rect) #f)
+                         "handle_event" (lambda (state event) event-result/ignore)))))
+
+;; re-arm on a timer so the bar revives by itself
+(define (scopeline-tick!)
+  (when *scopeline-enabled?*
+    (scopeline-ensure-component!)
+    (enqueue-thread-local-callback-with-delay 3000 scopeline-tick!)))
+
 ;; runs on every cursor move, so it stays cheap and never forces a redraw.
 ;; the normal repaint that follows a move already re-renders the bar
 (define (scopeline-refresh-path!)
@@ -327,6 +344,7 @@
       (let ([switched (not (equal? doc-id *scopeline-doc-id*))]
             [was-visible (scopeline-bar-visible?)])
         (when switched ; buffer switch makes query again
+          (scopeline-ensure-component!)
           (set! *scopeline-doc-id* doc-id)
           (set! *scopeline-crumbs* (scopeline-doc-crumbs doc-id)))
         (scopeline-update-view! doc-id)
@@ -337,6 +355,8 @@
 (define (scopeline-refresh-crumbs!)
   (let ([doc-id (scopeline-current-doc-id)])
     (when doc-id
+      ;; always re-arm, the doc switch may go unnoticed
+      (scopeline-ensure-component!)
       (set! *scopeline-doc-id* doc-id)
       (set! *scopeline-crumbs* (scopeline-doc-crumbs doc-id))
       (scopeline-update-view! doc-id)
@@ -364,6 +384,9 @@
                    (lambda (_) (when *scopeline-enabled?* (scopeline-debounce 50 scopeline-refresh-crumbs!))))
     (register-hook 'selection-did-change
                    (lambda (_) (when *scopeline-enabled?* (scopeline-refresh-path!))))
+    ;; refresh on buffer switches without a selection move (picker, buffer-next)
+    (register-hook 'document-focus-lost
+                   (lambda (_) (when *scopeline-enabled?* (scopeline-refresh-path!))))
     (set! *scopeline-hooks?* #t)))
 
 ;;@doc
@@ -372,12 +395,8 @@
   (unless *scopeline-enabled?*
     (set! *scopeline-enabled?* #t)
     (scopeline-register-hooks!)
-    (push-component!
-     (new-component! "scopeline"
-                     #f
-                     scopeline-render
-                     (hash "cursor" (lambda (state rect) #f)
-                           "handle_event" (lambda (state event) event-result/ignore))))
+    (scopeline-ensure-component!)
+    (enqueue-thread-local-callback scopeline-tick!)
     ;; refresh on the next tick: called from init.scm before a view exists, and
     ;; editor->doc-id panics in rust when the view tree has no view yet
     (enqueue-thread-local-callback scopeline-refresh-crumbs!)))
