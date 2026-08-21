@@ -1,1 +1,12 @@
-(binding attrpath: (attrpath) @variable) @context
+;; attrset bindings, let bindings and with scopes, like dropbar shows
+(attrset_expression
+  (binding_set
+    (binding attrpath: (attrpath) @property) @context))
+(rec_attrset_expression
+  (binding_set
+    (binding attrpath: (attrpath) @property) @context))
+(let_expression
+  (binding_set
+    (binding attrpath: (attrpath) @variable) @context))
+(with_expression
+  environment: (variable_expression name: (identifier) @variable)) @context
