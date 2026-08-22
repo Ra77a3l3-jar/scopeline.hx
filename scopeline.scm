@@ -197,6 +197,33 @@
     (let ([v (eval-string "(moka-reserved-bottom)")])
       (if (number? v) v 0))))
 
+;; forest snacks sidebar accessors, resolved once forest is loaded
+(define *scopeline-forest-geom* 'unresolved)
+
+(define (scopeline-resolve-forest!)
+  (when (equal? *scopeline-forest-geom* 'unresolved)
+    (let ([a (with-handler (lambda (_) #f) (eval 'forest-snacks-active?))]
+          [s (with-handler (lambda (_) #f) (eval 'forest-snacks-side))]
+          [w (with-handler (lambda (_) #f) (eval 'forest-snacks-width))])
+      (set! *scopeline-forest-geom*
+            (if (and a s w) (list a s w) 'none)))))
+
+;; x0 width of the text buffer area, full row when forest snacks is closed
+(define (scopeline-bar-clip width)
+  (scopeline-resolve-forest!)
+  (define g *scopeline-forest-geom*)
+  (define fallback (list 0 width))
+  (cond
+    [(or (equal? g 'unresolved) (equal? g 'none)) fallback]
+    [else
+     (with-handler
+       (lambda (_) fallback)
+       (if (and ((car g)) (equal? ((cadr g)) 'left))
+           (list ((caddr g)) (max 1 (- width ((caddr g)))))
+           (if (and ((car g)) (equal? ((cadr g)) 'right))
+               (list 0 (max 1 (- width ((caddr g)))))
+               fallback)))]))
+
 (define (scopeline-doc-count)
   (with-handler (lambda (_) 0) (length (editor-all-documents))))
 
@@ -287,17 +314,18 @@
 (define (scopeline-segs-width segs)
   (foldl (lambda (s acc) (+ acc (string-length (car s)))) 0 segs))
 
-;; paint left to right, anchored to the right edge when right? is #t
-(define (scopeline-draw frame y width segs right?)
-  (let ([start (if right? (max 1 (- width 1 (scopeline-segs-width segs))) 1)])
+;; paint left to right inside (x0, x0 + width), anchored to the right edge
+;; when right? is #t
+(define (scopeline-draw frame y x0 width segs right?)
+  (let ([start (if right? (max (+ x0 1) (- (+ x0 width) 1 (scopeline-segs-width segs))) (+ x0 1))])
     (let loop ([xs segs] [x start])
       (cond
         [(empty? xs) void]
-        [(>= x (- width 1)) void]
+        [(>= x (- (+ x0 width) 1)) void]
         [else
          (let* ([text (car (car xs))]
                 [style (cdr (car xs))]
-                [room (- width 1 x)]
+                [room (- (+ x0 width) 1 x)]
                 [shown (if (> (string-length text) room) (substring text 0 (max 0 room)) text)])
            (frame-set-string! frame x y shown style)
            (loop (cdr xs) (+ x (string-length shown))))]))))
@@ -307,34 +335,31 @@
     (with-handler
       (lambda (_) void)
       (let* ([width (area-width rect)]
+             [clip (scopeline-bar-clip width)]
+             [x0 (car clip)]
+             [bw (cadr clip)]
              [y (scopeline-bar-row (area-height rect))]
              [bg (scopeline-bar-bg)]
              [base (scopeline-seg (style->fg (theme-scope-ref "ui.text")) bg)]
              [sep (scopeline-seg (style->fg (theme-scope-ref "comment")) bg)])
-        (buffer/clear-with frame (area 0 y width 1) (scopeline-bar-style))
-        (scopeline-draw frame y width (scopeline-segments base sep bg) (scopeline-right?))))))
+        (buffer/clear-with frame (area x0 y bw 1) (scopeline-bar-style))
+        (scopeline-draw frame y x0 bw (scopeline-segments base sep bg) (scopeline-right?))))))
 
 ;; refresh path and file from the cached crumbs
 (define (scopeline-update-view! doc-id)
   (set! *scopeline-path* (scopeline-cursor-path *scopeline-crumbs* doc-id))
   (set! *scopeline-file* (with-handler (lambda (_) #f) (cx->current-file))))
 
-;; re-create the bar, the fork sometimes kills it with hx . 
-(define (scopeline-ensure-component!)
+;; add the bar to the screen once. popups remove only themselves when
+;; they close, so nothing here can remove the bar
+(define (scopeline-push-component!)
   (set! *scopeline-enabled?* #t)
-  (pop-last-component-by-name! "scopeline")
   (push-component!
    (new-component! "scopeline"
                    #f
                    scopeline-render
                    (hash "cursor" (lambda (state rect) #f)
                          "handle_event" (lambda (state event) event-result/ignore)))))
-
-;; re-arm on a timer so the bar revives by itself
-(define (scopeline-tick!)
-  (when *scopeline-enabled?*
-    (scopeline-ensure-component!)
-    (enqueue-thread-local-callback-with-delay 3000 scopeline-tick!)))
 
 ;; runs on every cursor move, so it stays cheap and never forces a redraw.
 ;; the normal repaint that follows a move already re-renders the bar
@@ -344,7 +369,6 @@
       (let ([switched (not (equal? doc-id *scopeline-doc-id*))]
             [was-visible (scopeline-bar-visible?)])
         (when switched ; buffer switch makes query again
-          (scopeline-ensure-component!)
           (set! *scopeline-doc-id* doc-id)
           (set! *scopeline-crumbs* (scopeline-doc-crumbs doc-id)))
         (scopeline-update-view! doc-id)
@@ -355,8 +379,6 @@
 (define (scopeline-refresh-crumbs!)
   (let ([doc-id (scopeline-current-doc-id)])
     (when doc-id
-      ;; always re-arm, the doc switch may go unnoticed
-      (scopeline-ensure-component!)
       (set! *scopeline-doc-id* doc-id)
       (set! *scopeline-crumbs* (scopeline-doc-crumbs doc-id))
       (scopeline-update-view! doc-id)
@@ -395,9 +417,8 @@
   (unless *scopeline-enabled?*
     (set! *scopeline-enabled?* #t)
     (scopeline-register-hooks!)
-    (scopeline-ensure-component!)
-    (enqueue-thread-local-callback scopeline-tick!)
-    ;; refresh on the next tick: called from init.scm before a view exists, and
+    (scopeline-push-component!)
+    ;; refresh later: called from init.scm before a view exists, and
     ;; editor->doc-id panics in rust when the view tree has no view yet
     (enqueue-thread-local-callback scopeline-refresh-crumbs!)))
 
