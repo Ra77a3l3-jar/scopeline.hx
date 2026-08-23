@@ -11,7 +11,9 @@
 (provide scopeline-enable
          scopeline-disable
          scopeline-toggle
-         scopeline-configure!)
+         scopeline-configure!
+         scopeline-reserved-top
+         scopeline-set-forest-clip!)
 
 (struct ScopeCrumb (kind name start end))
 
@@ -197,32 +199,23 @@
     (let ([v (eval-string "(moka-reserved-bottom)")])
       (if (number? v) v 0))))
 
-;; forest snacks sidebar accessors, resolved once forest is loaded
-(define *scopeline-forest-geom* 'unresolved)
+(define *scopeline-forest-side* #f)
+(define *scopeline-forest-width* 0)
 
-(define (scopeline-resolve-forest!)
-  (when (equal? *scopeline-forest-geom* 'unresolved)
-    (let ([a (with-handler (lambda (_) #f) (eval 'forest-snacks-active?))]
-          [s (with-handler (lambda (_) #f) (eval 'forest-snacks-side))]
-          [w (with-handler (lambda (_) #f) (eval 'forest-snacks-width))])
-      (set! *scopeline-forest-geom*
-            (if (and a s w) (list a s w) 'none)))))
+;; forest calls this when the snacks sidebar opens, moves, or closes
+(define (scopeline-set-forest-clip! side width)
+  (set! *scopeline-forest-side* side)
+  (set! *scopeline-forest-width* (if (number? width) width 0)))
 
-;; x0 width of the text buffer area, full row when forest snacks is closed
+;; x0 and width of the text buffer, full row when forest snacks is closed
 (define (scopeline-bar-clip width)
-  (scopeline-resolve-forest!)
-  (define g *scopeline-forest-geom*)
-  (define fallback (list 0 width))
-  (cond
-    [(or (equal? g 'unresolved) (equal? g 'none)) fallback]
-    [else
-     (with-handler
-       (lambda (_) fallback)
-       (if (and ((car g)) (equal? ((cadr g)) 'left))
-           (list ((caddr g)) (max 1 (- width ((caddr g)))))
-           (if (and ((car g)) (equal? ((cadr g)) 'right))
-               (list 0 (max 1 (- width ((caddr g)))))
-               fallback)))]))
+  (if (and *scopeline-forest-side* (number? *scopeline-forest-width*) (> *scopeline-forest-width* 0))
+      (if (equal? *scopeline-forest-side* 'left)
+          (list *scopeline-forest-width* (max 1 (- width *scopeline-forest-width*)))
+          (if (equal? *scopeline-forest-side* 'right)
+              (list 0 (max 1 (- width *scopeline-forest-width*)))
+              (list 0 width)))
+      (list 0 width)))
 
 (define (scopeline-doc-count)
   (with-handler (lambda (_) 0) (length (editor-all-documents))))
@@ -247,6 +240,10 @@
 ;; bar draws and reserves its row when always-reserved? or a scope is under the cursor
 (define (scopeline-bar-visible?)
   (or *scopeline-always-reserved?* (not (empty? *scopeline-path*))))
+
+;; rows this bar occupies at the top, so forest can sit below it
+(define (scopeline-reserved-top)
+  (if (and *scopeline-enabled?* (scopeline-top?) (scopeline-bar-visible?)) 1 0))
 
 ;; reserve row, always or only when the bar has something to show
 ;; moka's row needs our clip, helix clips the native bufferline itself
