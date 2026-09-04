@@ -1,0 +1,20 @@
+(package_declaration
+  (identifier) @module) @context
+(procedure_declaration
+  (identifier) @function
+  (procedure
+    (block))) @context
+(procedure_declaration
+  (identifier) @function
+  (procedure
+    (uninitialized))) @context
+(overloaded_procedure_declaration
+  (identifier) @function) @context
+(struct_declaration
+  (identifier) @struct) @context
+(enum_declaration
+  (identifier) @enum) @context
+(union_declaration
+  (identifier) @struct) @context
+(bit_field_declaration
+  (identifier) @struct) @context

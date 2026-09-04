@@ -1,0 +1,3 @@
+(label) @context @function
+(assignment
+  (symbol) @variable) @context

@@ -1,0 +1,30 @@
+(part
+  text: (curly_group
+    (text) @interface)) @context
+(chapter
+  text: (curly_group
+    (text) @interface)) @context
+(section
+  text: (curly_group
+    (text) @interface)) @context
+(subsection
+  text: (curly_group
+    (text) @interface)) @context
+(subsubsection
+  text: (curly_group
+    (text) @interface)) @context
+(paragraph
+  text: (curly_group
+    (text) @interface)) @context
+(subparagraph
+  text: (curly_group
+    (text) @interface)) @context
+(generic_environment
+  begin: (begin
+    name: (curly_group_text
+      (text) @class))) @context
+(new_command_definition
+  declaration: (command_name) @macro) @context
+(new_command_definition
+  declaration: (curly_group_command_name
+    (command_name) @macro)) @context

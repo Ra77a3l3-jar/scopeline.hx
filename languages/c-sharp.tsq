@@ -1,0 +1,22 @@
+(namespace_declaration
+  name: (_) @namespace) @context
+(class_declaration
+  name: (identifier) @class) @context
+(struct_declaration
+  name: (identifier) @struct) @context
+(interface_declaration
+  name: (identifier) @interface) @context
+(enum_declaration
+  name: (identifier) @enum) @context
+(record_declaration
+  name: (identifier) @struct) @context
+(method_declaration
+  name: (identifier) @method) @context
+(constructor_declaration
+  name: (identifier) @constructor) @context
+(destructor_declaration
+  name: (identifier) @method) @context
+(property_declaration
+  name: (identifier) @property) @context
+(local_function_statement
+  name: (identifier) @function) @context

@@ -49,7 +49,7 @@ By default `#:bg` is `#f`, so the bar uses the theme background and looks transp
 
 ## Languages
 
-Context queries ship for, rust, python, c, cpp, go, java, javascript, typescript, zig, nix, scheme, ocaml.
+Context queries ship for, rust, python, c, cpp, go, java, javascript, typescript, zig, nix, scheme, ocaml, markdown, json, toml, nasm, gas, lua, bash, c-sharp, xml, odin, latex, haskell.
 Each lives in `languages/<lang>.tsq` and captures a container as `@context` plus a name whose capture is the kind icon.
 
 ## Contributing

@@ -1,0 +1,10 @@
+(function_declaration
+  name: (_) @function) @context
+(assignment_statement
+  (variable_list
+    name: (_) @function)
+  (expression_list
+    (function_definition))) @context
+(field
+  name: (identifier) @function
+  value: (function_definition)) @context

@@ -1,0 +1,6 @@
+(element
+  (STag
+    (Name) @struct)) @context
+(element
+  (EmptyElemTag
+    (Name) @struct)) @context

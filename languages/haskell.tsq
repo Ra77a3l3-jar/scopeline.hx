@@ -1,0 +1,14 @@
+(module
+  (module_id) @module) @context
+(decl/function
+  name: (variable) @function) @context
+(decl/bind
+  name: (variable) @variable) @context
+(data_type
+  name: (_) @struct) @context
+(newtype
+  name: (_) @struct) @context
+(class
+  name: (_) @trait) @context
+(instance
+  name: (_) @class) @context

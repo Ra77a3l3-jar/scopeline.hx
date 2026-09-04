@@ -1,0 +1,18 @@
+(table
+  (bare_key) @class) @context
+(table
+  (dotted_key) @class) @context
+(table
+  (quoted_key) @class) @context
+(table_array_element
+  (bare_key) @enum) @context
+(table_array_element
+  (dotted_key) @enum) @context
+(table_array_element
+  (quoted_key) @enum) @context
+(pair
+  (bare_key) @property) @context
+(pair
+  (dotted_key) @property) @context
+(pair
+  (quoted_key) @property) @context

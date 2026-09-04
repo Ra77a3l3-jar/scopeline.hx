@@ -1,0 +1,8 @@
+(label
+  name: (word) @function) @context
+(struc_declaration
+  name: (word) @struct) @context
+(preproc_multiline_macro
+  name: (word) @macro) @context
+(preproc_function_def
+  name: (word) @macro) @context

@@ -1,0 +1,6 @@
+(section
+  (atx_heading
+    heading_content: (_) @interface)) @context
+(section
+  (setext_heading
+    heading_content: (_) @interface)) @context
